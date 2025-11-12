@@ -110,11 +110,8 @@ export const getQuestionById = async (req: AuthRequest, res: Response): Promise<
     try {
         const { id } = req.params;
 
-        // Increment view count
-        await pool.query(
-            'UPDATE questions SET views_count = views_count + 1 WHERE id = $1',
-            [id]
-        );
+        // NOTE: View count increment moved to separate endpoint
+        // to allow client-side control of when to increment
 
         // Get question details
         const questionResult = await pool.query(
@@ -123,22 +120,10 @@ export const getQuestionById = async (req: AuthRequest, res: Response): Promise<
                 u.id as author_id,
                 u.display_name as author_name,
                 u.avatar_url as author_avatar,
-                u.reputation_points as author_reputation,
-                COALESCE(
-                    json_agg(
-                        DISTINCT jsonb_build_object(
-                            'id', t.id,
-                            'name', t.name,
-                            'slug', t.slug
-                        )
-                    ) FILTER (WHERE t.id IS NOT NULL), '[]'
-                ) as tags
+                u.reputation_points as author_reputation
             FROM questions q
             LEFT JOIN users u ON q.author_id = u.id
-            LEFT JOIN question_tags qt ON q.id = qt.question_id
-            LEFT JOIN tags t ON qt.tag_id = t.id
-            WHERE q.id = $1
-            GROUP BY q.id, u.id, u.display_name, u.avatar_url, u.reputation_points`,
+            WHERE q.id = $1`,
             [id]
         );
 
@@ -150,35 +135,58 @@ export const getQuestionById = async (req: AuthRequest, res: Response): Promise<
             return;
         }
 
-        // Get answers with comments
+        // Get tags separately
+        const tagsResult = await pool.query(
+            `SELECT 
+                t.id,
+                t.name,
+                t.slug
+            FROM tags t
+            INNER JOIN question_tags qt ON t.id = qt.tag_id
+            WHERE qt.question_id = $1`,
+            [id]
+        );
+
+        // Get answers
         const answersResult = await pool.query(
             `SELECT 
                 a.*,
                 u.id as author_id,
                 u.display_name as author_name,
                 u.avatar_url as author_avatar,
-                u.reputation_points as author_reputation,
-                COALESCE(
-                    json_agg(
-                        DISTINCT jsonb_build_object(
-                            'id', c.id,
-                            'content', c.content,
-                            'authorId', cu.id,
-                            'authorName', cu.display_name,
-                            'authorAvatar', cu.avatar_url,
-                            'createdAt', c.created_at
-                        ) ORDER BY c.created_at ASC
-                    ) FILTER (WHERE c.id IS NOT NULL), '[]'
-                ) as comments
+                u.reputation_points as author_reputation
             FROM answers a
             LEFT JOIN users u ON a.author_id = u.id
-            LEFT JOIN comments c ON c.commentable_type = 'answer' AND c.commentable_id = a.id
-            LEFT JOIN users cu ON c.author_id = cu.id
             WHERE a.question_id = $1
-            GROUP BY a.id, u.id, u.display_name, u.avatar_url, u.reputation_points
             ORDER BY a.is_accepted DESC, a.upvotes_count DESC, a.created_at ASC`,
             [id]
         );
+
+        // Get answer comments for each answer
+        const answerIds = answersResult.rows.map(a => a.id);
+        let answerCommentsResult = { rows: [] };
+        
+        if (answerIds.length > 0) {
+            answerCommentsResult = await pool.query(
+                `SELECT 
+                    c.*,
+                    c.commentable_id as answer_id,
+                    u.id as author_id,
+                    u.display_name as author_name,
+                    u.avatar_url as author_avatar
+                FROM comments c
+                LEFT JOIN users u ON c.author_id = u.id
+                WHERE c.commentable_type = 'answer' AND c.commentable_id = ANY($1)
+                ORDER BY c.created_at ASC`,
+                [answerIds]
+            );
+        }
+
+        // Attach comments to answers
+        const answers = answersResult.rows.map((answer: any) => ({
+            ...answer,
+            comments: answerCommentsResult.rows.filter((c: any) => c.answer_id === answer.id)
+        }));
 
         // Get question comments
         const commentsResult = await pool.query(
@@ -195,7 +203,8 @@ export const getQuestionById = async (req: AuthRequest, res: Response): Promise<
         );
 
         const question = questionResult.rows[0];
-        question.answers = answersResult.rows;
+        question.tags = tagsResult.rows;
+        question.answers = answers;
         question.comments = commentsResult.rows;
 
         res.json({
@@ -391,6 +400,31 @@ export const deleteQuestion = async (req: AuthRequest, res: Response): Promise<v
         });
     } catch (error) {
         console.error('Delete question error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error'
+        });
+    }
+};
+
+// ============================================
+// INCREMENT VIEW COUNT
+// ============================================
+export const incrementViewCount = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+
+        await pool.query(
+            'UPDATE questions SET views_count = views_count + 1 WHERE id = $1',
+            [id]
+        );
+
+        res.json({
+            success: true,
+            message: 'View count incremented'
+        });
+    } catch (error) {
+        console.error('Increment view count error:', error);
         res.status(500).json({
             success: false,
             message: 'Server error'

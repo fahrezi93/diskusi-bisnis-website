@@ -29,6 +29,11 @@ router.put('/:id', authenticateToken, questionController.updateQuestion);
 // @access  Private (Author or Admin)
 router.delete('/:id', authenticateToken, questionController.deleteQuestion);
 
+// @route   POST /api/questions/:id/view
+// @desc    Increment view count
+// @access  Public
+router.post('/:id/view', questionController.incrementViewCount);
+
 // @route   POST /api/questions/:id/close
 // @desc    Close question
 // @access  Private (Author or Admin)
