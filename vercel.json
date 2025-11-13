@@ -1,24 +1,16 @@
 {
   "name": "diskusi-bisnis",
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/frontend/$1"
-    }
-  ],
+  "buildCommand": "cd frontend && npm run build",
+  "outputDirectory": "frontend/.next",
+  "installCommand": "cd frontend && npm install",
+  "devCommand": "cd frontend && npm run dev",
   "env": {
     "NODE_ENV": "production"
   },
-  "build": {
-    "env": {
-      "NODE_ENV": "production"
-    }
-  },
   "functions": {
-    "frontend/app/**": {
+    "app/**": {
       "maxDuration": 30
     }
   },
-  "regions": ["sin1"],
-  "framework": "nextjs"
+  "regions": ["sin1"]
 }
