@@ -45,7 +45,7 @@ export default function HomePage() {
   const fetchQuestions = useCallback(async () => {
     try {
       setLoading(true);
-      const params: any = { sort: sortBy };
+      const params: { sort: string; tag?: string } = { sort: sortBy };
       if (tagParam) {
         params.tag = tagParam;
       }

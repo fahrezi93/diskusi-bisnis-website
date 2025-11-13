@@ -4,6 +4,9 @@ import "./globals.css";
 import "../styles/mobile-fixes.css";
 import ClientProviders from "./components/ClientProviders";
 
+// Force dynamic rendering for error pages
+export const dynamicParams = true;
+
 const poppins = Poppins({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],

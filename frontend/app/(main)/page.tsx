@@ -1,6 +1,9 @@
 import { Suspense } from 'react';
 import HomePage from '@/components/pages/HomePage';
 
+// Force dynamic rendering to avoid prerender errors with client contexts
+export const dynamic = 'force-dynamic';
+
 function HomePageSkeleton() {
   return (
     <div className="max-w-6xl mx-auto">

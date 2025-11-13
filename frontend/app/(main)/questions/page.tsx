@@ -1,6 +1,9 @@
 import { Suspense } from 'react';
 import QuestionsPageContent from '@/components/pages/QuestionsPageContent';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 function QuestionsPageSkeleton() {
   return (
     <div className="max-w-6xl mx-auto">
