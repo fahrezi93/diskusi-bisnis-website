@@ -29,4 +29,9 @@ router.put('/:id', authenticateToken, requireAdmin, tagController.updateTag);
 // @access  Private (Admin only)
 router.delete('/:id', authenticateToken, requireAdmin, tagController.deleteTag);
 
+// @route   POST /api/tags/sample
+// @desc    Create sample tags (for development)
+// @access  Private
+router.post('/sample', authenticateToken, tagController.createSampleTags);
+
 export default router;

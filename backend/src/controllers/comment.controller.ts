@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import pool from '../config/database';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { createCommentNotification } from '../services/notification.service';
 
 export const createComment = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -12,6 +13,16 @@ export const createComment = async (req: AuthRequest, res: Response): Promise<vo
              VALUES ($1, $2, $3, $4) RETURNING *`,
             [content, userId, commentableType, commentableId]
         );
+
+        // Create notification for comment
+        if (userId) {
+            try {
+                await createCommentNotificationForContent(commentableType, commentableId, userId);
+            } catch (notifError) {
+                console.error('Error creating comment notification:', notifError);
+                // Don't fail the comment creation if notification fails
+            }
+        }
 
         res.status(201).json({ success: true, data: result.rows[0] });
     } catch (error) {
@@ -64,3 +75,29 @@ export const deleteComment = async (req: AuthRequest, res: Response): Promise<vo
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
+
+async function createCommentNotificationForContent(commentableType: string, commentableId: string, commenterUserId: string) {
+    const table = commentableType === 'question' ? 'questions' : 'answers';
+    
+    // Get content details and commenter info
+    const result = await pool.query(
+        `SELECT c.title, c.author_id, u.display_name as commenter_name
+         FROM ${table} c, users u
+         WHERE c.id = $1 AND u.id = $2`,
+        [commentableId, commenterUserId]
+    );
+
+    if (result.rows.length > 0) {
+        const content = result.rows[0];
+        // Only send notification if commenter is not the content author
+        if (content.author_id !== commenterUserId) {
+            await createCommentNotification(
+                content.author_id,
+                content.commenter_name,
+                content.title,
+                commentableId,
+                commentableType as 'question' | 'answer'
+            );
+        }
+    }
+}

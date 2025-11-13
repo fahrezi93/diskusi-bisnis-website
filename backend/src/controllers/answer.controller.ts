@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import pool from '../config/database';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { createAnswerNotification } from '../services/notification.service';
 
 export const createAnswer = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -18,6 +19,32 @@ export const createAnswer = async (req: AuthRequest, res: Response): Promise<voi
             'UPDATE questions SET answers_count = answers_count + 1 WHERE id = $1',
             [questionId]
         );
+
+        // Get question details and author info for notification
+        const questionResult = await pool.query(
+            `SELECT q.title, q.author_id, u.display_name as answerer_name
+             FROM questions q, users u
+             WHERE q.id = $1 AND u.id = $2`,
+            [questionId, userId]
+        );
+
+        if (questionResult.rows.length > 0) {
+            const question = questionResult.rows[0];
+            // Only send notification if answerer is not the question author
+            if (question.author_id !== userId) {
+                try {
+                    await createAnswerNotification(
+                        question.author_id,
+                        question.answerer_name,
+                        question.title,
+                        questionId
+                    );
+                } catch (notifError) {
+                    console.error('Error creating answer notification:', notifError);
+                    // Don't fail the answer creation if notification fails
+                }
+            }
+        }
 
         res.status(201).json({ success: true, data: result.rows[0] });
     } catch (error) {

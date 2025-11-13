@@ -19,4 +19,9 @@ router.put('/:id/read', authenticateToken, notificationController.markAsRead);
 // @access  Private
 router.put('/read-all', authenticateToken, notificationController.markAllAsRead);
 
+// @route   POST /api/notifications/test
+// @desc    Create test notifications (for development)
+// @access  Private
+router.post('/test', authenticateToken, notificationController.createTestNotifications);
+
 export default router;

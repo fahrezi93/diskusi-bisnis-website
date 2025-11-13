@@ -4,6 +4,11 @@ import { authenticateToken } from '../middleware/auth.middleware';
 
 const router = Router();
 
+// @route   GET /api/users
+// @desc    Get all users
+// @access  Public
+router.get('/', userController.getAllUsers);
+
 // @route   GET /api/users/:id
 // @desc    Get user profile
 // @access  Public
@@ -23,5 +28,10 @@ router.get('/:id/questions', userController.getUserQuestions);
 // @desc    Get user's answers
 // @access  Public
 router.get('/:id/answers', userController.getUserAnswers);
+
+// @route   POST /api/users/sample
+// @desc    Create sample users for testing
+// @access  Public (development only)
+router.post('/sample', userController.createSampleUsers);
 
 export default router;

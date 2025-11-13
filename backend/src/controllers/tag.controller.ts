@@ -5,7 +5,15 @@ import { AuthRequest } from '../middleware/auth.middleware';
 export const getAllTags = async (req: Request, res: Response): Promise<void> => {
     try {
         const result = await pool.query(
-            'SELECT * FROM tags ORDER BY usage_count DESC, name ASC'
+            `SELECT 
+                id, 
+                name, 
+                slug, 
+                description, 
+                usage_count as "questionCount", 
+                created_at as "createdAt"
+            FROM tags 
+            ORDER BY usage_count DESC, name ASC`
         );
 
         res.json({ success: true, data: result.rows });
@@ -18,27 +26,27 @@ export const getTagBySlug = async (req: Request, res: Response): Promise<void> =
     try {
         const { slug } = req.params;
 
-        const tagResult = await pool.query('SELECT * FROM tags WHERE slug = $1', [slug]);
+        const tagResult = await pool.query(
+            `SELECT 
+                id, 
+                name, 
+                slug, 
+                description, 
+                usage_count as "questionCount", 
+                created_at as "createdAt"
+            FROM tags 
+            WHERE slug = $1`, 
+            [slug]
+        );
         
         if (tagResult.rows.length === 0) {
             res.status(404).json({ success: false, message: 'Tag not found' });
             return;
         }
 
-        const questionsResult = await pool.query(
-            `SELECT q.* FROM questions q 
-             JOIN question_tags qt ON q.id = qt.question_id 
-             WHERE qt.tag_id = $1 
-             ORDER BY q.created_at DESC`,
-            [tagResult.rows[0].id]
-        );
-
         res.json({ 
             success: true, 
-            data: { 
-                tag: tagResult.rows[0], 
-                questions: questionsResult.rows 
-            } 
+            data: tagResult.rows[0]
         });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error' });
@@ -83,6 +91,38 @@ export const deleteTag = async (req: AuthRequest, res: Response): Promise<void> 
         await pool.query('DELETE FROM tags WHERE id = $1', [id]);
         res.json({ success: true, message: 'Tag deleted' });
     } catch (error) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+export const createSampleTags = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const sampleTags = [
+            { name: 'Marketing', slug: 'marketing', description: 'Strategi pemasaran dan promosi bisnis' },
+            { name: 'Keuangan', slug: 'keuangan', description: 'Pengelolaan keuangan dan akuntansi UMKM' },
+            { name: 'Pajak', slug: 'pajak', description: 'Pertanyaan seputar perpajakan UMKM' },
+            { name: 'Legalitas', slug: 'legalitas', description: 'Aspek hukum dan perizinan usaha' },
+            { name: 'Digital', slug: 'digital', description: 'Transformasi digital dan teknologi' },
+            { name: 'Ekspor', slug: 'ekspor', description: 'Perdagangan internasional dan ekspor' },
+            { name: 'Startup', slug: 'startup', description: 'Memulai bisnis dan startup' },
+            { name: 'Investasi', slug: 'investasi', description: 'Pencarian modal dan investasi' }
+        ];
+
+        for (const tag of sampleTags) {
+            try {
+                await pool.query(
+                    'INSERT INTO tags (name, slug, description) VALUES ($1, $2, $3) ON CONFLICT (slug) DO NOTHING',
+                    [tag.name, tag.slug, tag.description]
+                );
+            } catch (error) {
+                // Ignore duplicate errors
+                console.log(`Tag ${tag.name} already exists`);
+            }
+        }
+
+        res.json({ success: true, message: 'Sample tags created successfully' });
+    } catch (error) {
+        console.error('Error creating sample tags:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };

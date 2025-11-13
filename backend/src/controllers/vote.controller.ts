@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import pool from '../config/database';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { createVoteNotification } from '../services/notification.service';
 
 export const castVote = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -43,6 +44,16 @@ export const castVote = async (req: AuthRequest, res: Response): Promise<void> =
 
         await updateVoteCount(votableType, votableId, voteType, 1);
         await updateAuthorReputation(votableType, votableId, voteType);
+
+        // Create notification for upvotes only
+        if (voteType === 'upvote' && userId) {
+            try {
+                await createVoteNotificationForContent(votableType, votableId, userId);
+            } catch (notifError) {
+                console.error('Error creating vote notification:', notifError);
+                // Don't fail the vote if notification fails
+            }
+        }
 
         res.status(201).json({ success: true, message: 'Vote cast successfully' });
     } catch (error) {
@@ -98,5 +109,32 @@ async function updateAuthorReputation(votableType: string, votableId: string, vo
             'UPDATE public.users SET reputation_points = reputation_points + $1 WHERE id = $2',
             [points, result.rows[0].author_id]
         );
+    }
+}
+
+async function createVoteNotificationForContent(votableType: string, votableId: string, voterUserId: string) {
+    const table = votableType === 'question' ? 'questions' : 'answers';
+    
+    // Get content details and voter info
+    const result = await pool.query(
+        `SELECT c.title, c.author_id, u.display_name as voter_name
+         FROM ${table} c, users u
+         WHERE c.id = $1 AND u.id = $2`,
+        [votableId, voterUserId]
+    );
+
+    if (result.rows.length > 0) {
+        const content = result.rows[0];
+        // Only send notification if voter is not the content author
+        if (content.author_id !== voterUserId) {
+            await createVoteNotification(
+                content.author_id,
+                content.voter_name,
+                content.title,
+                votableId,
+                'upvote',
+                votableType as 'question' | 'answer'
+            );
+        }
     }
 }
